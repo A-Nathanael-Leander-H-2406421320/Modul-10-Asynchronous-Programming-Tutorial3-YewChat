@@ -13,7 +13,7 @@
 - The application should automatically open in your default web browser at `http://localhost:8000`. You can start sending messages through the chat interface, and they will be relayed to the WebSocket server on port 8080.
 - Open more browser tabs to `http://localhost:8000` to simulate multiple clients and see the real-time chat functionality in action.
 
-## Reflection 2.1 Original code (refactored for modern Rust usage)
+## Reflection 3.1 Original code (refactored for modern Rust usage)
 
 ![Screenshot of the YewChat application showing a simple chat interface with messages and an input box, and also the terminal running the web server on port 8080](assets/3.1.png)
 
@@ -38,3 +38,26 @@ To resolve this, I decided to build the application from scratch using a modern 
     Modern Rust executes asynchronous tasks extremely fast. I encountered a race condition where the Rust client attempted to send the Register payload while the socket was still in the `CONNECTING` state, causing the NodeJS server to instantly drop the connection (Code 1006). I solved this by introducing `gloo-timers` to implement a safe 500ms delay, allowing the handshake to complete. Furthermore, I utilized `#[serde(skip_serializing_if = "Option::is_none")]` to dynamically omit the data_array field from the JSON payload when it's not needed, successfully preventing the NodeJS server from crashing due to null value evaluations.
 
 Overall, this refactoring experience provided deep insights into how much the Rust WebAssembly ecosystem has matured, favoring simpler hook-based architectures and dedicated WASM tooling over complex JavaScript bundler integrations.
+
+## Reflection 3.2 Add some creativities to the webclient
+
+![Screenshot of the YewChat application showing the new image upload feature, emoji picker, and light/dark theme](assets/3.2.png)
+
+To elevate the user experience and explore the full potential of Yew and WebAssembly, I implemented three major creative features on top of the refactored modern YewChat application. These features focus on interactivity, accessibility, and client-side performance optimization.
+
+- Interactive Emoji Selector
+
+    I added a Unicode-based emoji selector to make the chat more expressive. This feature utilizes a boolean state (`use_state`) to toggle the visibility of an absolute-positioned floating popup menu over the chat input. When an emoji button is clicked, a callback appends the specific Unicode character to the existing `chat_input` state. This demonstrates seamless real-time state manipulation without unnecessary re-renders.
+
+- Dynamic Dark/Light Theme with System Detection
+
+    To improve accessibility and user comfort, I implemented a dynamic theming system that automatically adapts to the user's operating system preferences, along with a manual toggle. I utilized the `web-sys` crate to access the browser's Window API and evaluate the `(prefers-color-scheme: dark)` media query during the initial component render. The result dictates the initial boolean value of the `is_dark state`. The UI rendering logic then dynamically injects specific Tailwind CSS classes (e.g., swapping `bg-white` with `bg-gray-900`) based on this state. This provides a premium, flicker-free theming experience entirely driven by Rust.
+
+- Image Attachment with Client-Side Compression
+
+    To simulate a production-ready chat application, I added image upload capabilities. The stock implementation already supported online GIFs, but I extended it to support local image uploads as well. However, to prevent overloading the simple NodeJS broadcast server with massive file payloads, I implemented a strict client-side compression pipeline. This is achieved by heavily leveraging `web-sys`, `js-sys`, and `wasm-bindgen` to interact directly with the HTML5 DOM API from Rust.
+    - A hidden `<input type="file">` captures the image.
+    - A `FileReader` loads the file into an `HtmlImageElement`.
+    - The image is drawn onto an in-memory `HtmlCanvasElement`. The Rust logic calculates the aspect ratio to downscale the image so that its maximum dimension does not exceed 800 pixels.
+    - The canvas exports the resized image as a JPEG Data URL (Base64) with a quality factor of 0.7, drastically reducing the file size (typically well under 500 KB).
+    - The resulting Base64 string is safely sent via the WebSocket Message payload.
